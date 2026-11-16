@@ -185,6 +185,10 @@ module.exports = async (req, res) => {
         flags: v.flags,
         primaryFlag: v.primaryFlag,
         channels: v.channels,
+        // Contact tags when this lead was enriched, otherwise the opportunity
+        // relation tags already on the pipeline read. The Lost button uses
+        // them to recognise a held Interview or Review. See public/actions.js.
+        tags: (Array.isArray(tags) ? tags : []).map((t) => String((t && t.name) || t || "")).filter(Boolean),
       };
     }
 

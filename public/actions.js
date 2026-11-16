@@ -51,8 +51,82 @@
     return new Date(l.appointment.at).getTime() >= start.getTime();
   }
 
-  // Which buttons show depends on where the lead is now. Not Qualified, Lost
-  // and Abandoned are on every one of these lists.
+  // Interview and Review stages. Lost is a real outcome only once a lead is
+  // here, or once a held Interview or Review is already on the record.
+  var INTERVIEW_REVIEW_STAGE_IDS = {
+    "52d0b1ab-88b1-452b-8966-88e269e9ec75": true, // Sending Interview Reminders
+    "fbb75036-ca89-43ee-948a-ed9f60d324f8": true, // Interview Booked
+    "948a6e28-7669-402e-b632-d84b452ebac0": true, // Sending Review Reminders
+    "ae66e02e-8a8a-446d-a26f-85bce067126c": true, // Review Booked
+  };
+
+  function isInterviewOrReviewStage(l) {
+    if (l.stageId && INTERVIEW_REVIEW_STAGE_IDS[l.stageId]) return true;
+    var st = String(l.stage || "");
+    if (/diagnostic/i.test(st)) return false;
+    return (/interview/i.test(st) || /review/i.test(st)) && (/reminder/i.test(st) || /booked/i.test(st));
+  }
+
+  // An intro card is the intro stage, an intro appointment, or any other
+  // booked call that is not a diagnostic, interview, or review. An intro call
+  // alone is never Lost.
+  function isIntroCard(l) {
+    if (isDiagnosticCard(l) || isInterviewOrReviewStage(l)) return false;
+    var st = String(l.stage || "");
+    var title = ((l.appointment && l.appointment.title) || l.callTitle || "");
+    if (/intro/i.test(st)) return true;
+    if (/intro/i.test(title) && !/interview|review|diagnostic/i.test(title)) return true;
+    if (l.status === "booked" && !/interview|review|diagnostic/i.test(st) && !/interview|review|diagnostic/i.test(title)) return true;
+    return false;
+  }
+
+  // Held Interview or Review, from signals the toolkit already has. No new
+  // CRM read. Two signals, either one is enough:
+  //
+  // 1. Tags already loaded onto the lead. Prep cards use the contact's tags.
+  //    Lightweight cards use the opportunity's relation tags. A tag counts
+  //    when it names an interview or a review and it is not one of the
+  //    not-held outcomes the toolkit itself writes: pending-interview,
+  //    noshow-interview, booklater-interview, noshow-review, booklater-review.
+  //    pending-review counts: that tag is applied only after the interview
+  //    was held and the review was not booked on the call.
+  // 2. The appointment activity already stored on the lead: appointment.title
+  //    from the conversation history, or callTitle from that same history or
+  //    from the past-calendar fallback. The title must say interview or
+  //    review (and not diagnostic). When a time is present it must already
+  //    have started, so a future booking is not treated as held. The stored
+  //    activity has no show/no-show flag, so a past non-cancelled interview
+  //    or review title is the held signal.
+  function heldInterviewOrReview(l) {
+    var tags = Array.isArray(l.tags) ? l.tags : [];
+    for (var i = 0; i < tags.length; i++) {
+      var t = String(tags[i] || "").toLowerCase().trim();
+      if (!t || !/interview|review/.test(t)) continue;
+      if (t === "pending-interview" || t === "noshow-interview" || t === "booklater-interview" || t === "noshow-review" || t === "booklater-review") continue;
+      if (/noshow|booklater|no-show|book-later/.test(t)) continue;
+      return true;
+    }
+    var title = ((l.appointment && l.appointment.title) || l.callTitle || "");
+    if (!/interview|review/i.test(title) || /diagnostic/i.test(title)) return false;
+    var at = (l.appointment && l.appointment.at) || l.callAt || null;
+    if (!at) return true;
+    var ms = Date.parse(String(at).replace(" ", "T"));
+    if (!isFinite(ms)) return true;
+    return ms <= Date.now();
+  }
+
+  // Lost is not on intro cards, diagnostic cards, or the generic mover.
+  // A Pipeline-tab card uses that same generic mover, so it loses the button
+  // too, unless the lead is in an Interview or Review stage (those stages are
+  // opened from the Pipeline tab) or the held-call signal above is present.
+  function offersLost(l) {
+    if (isDiagnosticCard(l) || isIntroCard(l)) return false;
+    if (isInterviewOrReviewStage(l)) return true;
+    return heldInterviewOrReview(l);
+  }
+
+  // Which buttons show depends on where the lead is now. Not Qualified and
+  // Abandoned are on every one of these lists. Lost is not.
   function actionPlan(l, ctx) {
     var s = l.status, st = l.stage || "";
     var isInterview = /interview/i.test(st), isReview = /review/i.test(st);
@@ -66,8 +140,8 @@
       noshowReview: { label: "No Show", tag: "noshow-review", tone: "noshow", icon: "👻", what: "They did not turn up to the review call. Starts the reminders asking them to rebook the review." },
       booklaterReview: { label: "Book Later", tag: "booklater-review", tone: "chase", icon: "🔁", what: "They asked to move the review call to another time. Starts the same reminders asking them to rebook the review." },
       baking: { label: "Baking/Nurturing", tag: "baking", tone: "gray", icon: "🍿", what: "Interested but not ready yet. Moves them to Baking/Nurturing." },
-      nq: { label: "Not Qualified", tag: "not-qualified", tone: "dark", icon: "⛔️", what: "Not a fit or the call is off. Moves them to Not Qualified, cancels the call and stops all messages." },
-      lost: { label: "Lost", tag: "lost", tone: "dark", icon: "😞", what: "We actually worked with them. They went through the funnel and we lost them, because we did not do things right or for any other reason. You cannot lose something you never had the opportunity to win. Moves them to Lost, stops all messages, and they stay there." },
+      nq: { label: "Not Qualified", tag: "not-qualified", tone: "dark", icon: "⛔️", what: "They do not qualify. Moves them to Not Qualified, cancels the call and stops all messages. If we just couldn't get a booking, use Abandoned." },
+      lost: { label: "Lost", tag: "lost", tone: "dark", icon: "😞", what: "Only after a held Interview or Review call. An intro call alone is never Lost; use Not Qualified or Abandoned." },
       abandoned: { label: "Abandoned", tag: ABANDONED_TAG, tone: "dark", icon: "❌", what: "They kept getting the book-a-call reminders, or we never got them through the funnel properly. It is obviously never going to happen and we have tried everything. Moves them to Abandoned and stops the chase." },
       won: { label: "Client Won", tag: "won", tone: "green", icon: "🔥", what: "They signed. Moves them to Client Won." },
     };
@@ -83,7 +157,8 @@
         ? { label: label, tag: base + "-" + kind, tone: tone, icon: icon, what: what + " Call type: " + kind + "." }
         : { label: label, tag: "", needKind: base, tone: tone, icon: icon, what: what + " You pick the call type when you tap." };
     };
-    var closed = [B.baking, B.lost, B.nq, B.abandoned, B.won];
+    var closed = [B.baking, B.nq, B.abandoned, B.won];
+    if (offersLost(l)) closed.splice(1, 0, B.lost);
     // Carlos takes diagnostic calls himself. No no-show, book-later, or
     // "next call not booked" button, and never the intro tags.
     if (isDiagnosticCard(l)) return {
