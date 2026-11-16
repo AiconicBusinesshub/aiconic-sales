@@ -149,7 +149,14 @@ async function load(){
   btns.forEach(b=>b.disabled=true);
   try{
     const r = await fetch("/api/leads",{cache:"no-store"});
-    const d = await r.json();
+    const text = await r.text();
+    let d = null;
+    try { d = JSON.parse(text); } catch (_) { d = null; }
+    // A platform timeout is an HTML page ("An error occurred..."), which is
+    // not pipeline data. Say so, instead of showing the JSON parse error.
+    if (!d || typeof d !== "object") {
+      throw new Error("The server sent a page instead of the pipeline. It may have timed out. Try Refresh.");
+    }
     if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
     // The emergency stage is internal only. It never shows in the toolkit.
     d.stages = (d.stages||[]).filter(x=>!/emergency|sorry/i.test(String(x.name||"")));
