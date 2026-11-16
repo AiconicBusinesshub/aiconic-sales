@@ -254,7 +254,7 @@ function stageDetail(s){
     you:"Nothing.",
   };
   if(st==="lost") return {
-    what:"Leads we actually worked with. They went through the funnel and we lost them, because we did not do things right or for any other reason. You cannot lose something you never had the opportunity to win.",
+    what:"Only after a held Interview or Review call. An intro call alone is never Lost; use Not Qualified or Abandoned.",
     how:"They land here when someone taps Lost on a call card or on a lead in the Pipeline tab.",
     you:"Nothing.",
   };
@@ -579,7 +579,8 @@ function openStageSheet(s){
 
 // Outcome buttons live in /actions.js so the same list is what the tests check.
 // Each button adds one tag. The CRM workflow moves the stage. Abandoned is
-// offered everywhere Not Qualified and Lost are offered.
+// offered everywhere Not Qualified is offered. Lost is only on an Interview
+// or Review stage, or when the lead's tags or past call show a held one.
 function actionPlan(l, ctx){
   return window.SalesActions.actionPlan(l, ctx);
 }
@@ -604,7 +605,7 @@ function referenceBlock(l){
     survey: "They qualified through the form but have not booked their intro call yet. Reach out and send them the intro booking link so they book. The booking links are in the Links tab.",
     baking: "This lead is being nurtured. Not a client yet, and no automation runs from here. Use this card to look back at their details and previous call notes, and reach out when the timing is right.",
     clientwon: "This lead became a client. There is nothing to send from here. Use this card to look back at the account, its details, and the notes and Fathom links from its previous calls below.",
-    lost: "We actually worked with this lead. They went through the funnel and we lost them. You cannot lose something you never had the opportunity to win. There is nothing to send from here.",
+    lost: "Only after a held Interview or Review call. An intro call alone is never Lost; use Not Qualified or Abandoned.",
     abandoned: "They kept getting the book-a-call reminders, or we never got them through the funnel. It is obviously never going to happen and we have tried everything. There is nothing to send from here.",
     neverrescheduled: "They kept getting the book-a-call reminders, or we never got them through the funnel. It is obviously never going to happen and we have tried everything. There is nothing to send from here.",
     notqualified: "This lead was taken out of the process as not qualified. There is nothing to send from here. Use this card to review who was dropped and read their previous call notes below. Reach back only if something has genuinely changed.",
@@ -1056,7 +1057,7 @@ function openSheet(l, ctx){
       (l.status==="bookingreview"?'<div class="nshead review">They had their interview but have not booked their review call yet. Follow up by hand and get it booked this week.</div>':"")+
       (l.status==="survey"?'<div class="nshead book">Submitted the survey and qualified, but has not booked the intro yet. Reach out and send the intro booking link.</div>':"")+
       (l.status==="baking"?'<div class="nshead">Being nurtured, not a client yet. No automation runs from here.</div>':"")+
-      (l.status==="lost"?'<div class="nshead cancel">Lost. They went through the funnel and we lost them. You cannot lose something you never had the opportunity to win.</div>':"")+
+      (l.status==="lost"?'<div class="nshead cancel">Only after a held Interview or Review call. An intro call alone is never Lost; use Not Qualified or Abandoned.</div>':"")+
       (l.status==="abandoned"||l.status==="neverrescheduled"?'<div class="nshead cancel">Abandoned. The reminders ran out, or we never got them through the funnel. We have tried everything.</div>':"")+
       flagBox+
       prepBlock(l)+
